@@ -13,6 +13,10 @@ let notes = loadFromStorage('planner_notes');
 
 let chartInstance = null;
 let currentCalDate = new Date();
+let draggedCardId = null;
+
+// Canal de Sincronização em Tempo Real entre abas sem F5
+const syncChannel = new BroadcastChannel('lifeplanner_realtime_sync');
 
 function loadFromStorage(key) {
   try {
@@ -31,8 +35,24 @@ document.addEventListener('DOMContentLoaded', () => {
   setupBackup();
   setupTheme();
   setupCalendarControls();
+  setupDragAndDrop();
   renderAll();
 });
+
+// Sincronização entre abas
+syncChannel.onmessage = (event) => {
+  if (event.data && event.data.type === 'SYNC_ALL') {
+    finances = event.data.finances;
+    tasks = event.data.tasks;
+    goals = event.data.goals;
+    reminders = event.data.reminders;
+    habits = event.data.habits;
+    projects = event.data.projects;
+    recurring = event.data.recurring;
+    notes = event.data.notes;
+    renderAll();
+  }
+};
 
 // Navegação
 function setupNavigation() {
@@ -131,7 +151,6 @@ function setupBackup() {
 
 // Formulários
 function setupForms() {
-  // Finanças
   document.getElementById('finance-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const amount = parseFloat(document.getElementById('fin-amount').value);
@@ -149,7 +168,6 @@ function setupForms() {
     e.target.reset();
   });
 
-  // Contas Recorrentes
   document.getElementById('recurring-form').addEventListener('submit', (e) => {
     e.preventDefault();
     recurring.push({
@@ -164,7 +182,6 @@ function setupForms() {
     e.target.reset();
   });
 
-  // Tarefas
   document.getElementById('task-form').addEventListener('submit', (e) => {
     e.preventDefault();
     tasks.push({
@@ -179,7 +196,6 @@ function setupForms() {
     e.target.reset();
   });
 
-  // Projetos
   document.getElementById('project-form').addEventListener('submit', (e) => {
     e.preventDefault();
     projects.push({
@@ -192,7 +208,6 @@ function setupForms() {
     e.target.reset();
   });
 
-  // Hábitos
   document.getElementById('habit-form').addEventListener('submit', (e) => {
     e.preventDefault();
     habits.push({
@@ -205,7 +220,6 @@ function setupForms() {
     e.target.reset();
   });
 
-  // Metas
   document.getElementById('goal-form').addEventListener('submit', (e) => {
     e.preventDefault();
     const target = parseFloat(document.getElementById('goal-target').value);
@@ -223,7 +237,6 @@ function setupForms() {
     e.target.reset();
   });
 
-  // Lembretes
   document.getElementById('reminder-form').addEventListener('submit', (e) => {
     e.preventDefault();
     reminders.push({
@@ -237,7 +250,6 @@ function setupForms() {
     e.target.reset();
   });
 
-  // Diário e Notas
   document.getElementById('note-form').addEventListener('submit', (e) => {
     e.preventDefault();
     notes.push({
@@ -251,7 +263,6 @@ function setupForms() {
     e.target.reset();
   });
 
-  // Busca finanças
   document.getElementById('finance-search').addEventListener('input', (e) => {
     renderFinances(e.target.value.toLowerCase());
   });
@@ -275,7 +286,7 @@ function filterByScope(list) {
   return currentScope === 'all' ? list : list.filter(item => item.scope === currentScope);
 }
 
-// 1. Dashboard
+// Dashboard
 function renderDashboard() {
   const filteredFin = filterByScope(finances);
   const income = filteredFin.filter(i => i.type === 'receita').reduce((a, b) => a + b.amount, 0);
@@ -313,9 +324,10 @@ function renderChart(income, expense) {
   });
 }
 
-// 2. Finanças
+// Finanças
 function renderFinances(filterText = '') {
   const tbody = document.getElementById('finance-table-body');
+  if (!tbody) return;
   tbody.innerHTML = '';
   filterByScope(finances)
     .filter(f => f.desc.toLowerCase().includes(filterText))
@@ -332,7 +344,7 @@ function renderFinances(filterText = '') {
     });
 }
 
-// 3. Contas Recorrentes
+// Contas Recorrentes
 function renderRecurring() {
   const tbody = document.getElementById('recurring-table-body');
   if (!tbody) return;
@@ -366,54 +378,91 @@ function togglePaidRecurring(id, month) {
   }
 }
 
-// 4. Kanban (Com Solução de Arrastar/Soltar Corrigida)
-function renderTasks() {
-  const cols = { todo: document.getElementById('col-todo'), doing: document.getElementById('col-doing'), done: document.getElementById('col-done') };
-  Object.values(cols).forEach(c => { if(c) c.innerHTML = ''; });
+// Kanban Reativo com Drag & Drop nativo
+function setupDragAndDrop() {
+  const columns = document.querySelectorAll('.kanban-column');
+  columns.forEach(column => {
+    column.addEventListener('dragover', (e) => {
+      e.preventDefault();
+      column.classList.add('drag-over');
+    });
+    column.addEventListener('dragleave', () => {
+      column.classList.remove('drag-over');
+    });
+    column.addEventListener('drop', (e) => {
+      e.preventDefault();
+      column.classList.remove('drag-over');
+      const targetStatus = column.getAttribute('data-column');
+      if (draggedCardId && targetStatus) {
+        const task = tasks.find(t => t.id === Number(draggedCardId));
+        if (task) {
+          task.status = targetStatus;
+          saveAndRender('planner_tasks', tasks);
+        }
+        draggedCardId = null;
+      }
+    });
+  });
+}
 
-  filterByScope(tasks).forEach(task => {
+function renderTasks() {
+  const cols = { todo: document.getElementById('list-todo'), doing: document.getElementById('list-doing'), done: document.getElementById('list-done') };
+  const counts = { todo: document.getElementById('count-todo'), doing: document.getElementById('count-doing'), done: document.getElementById('count-done') };
+
+  Object.keys(cols).forEach(status => {
+    if (cols[status]) cols[status].innerHTML = '';
+  });
+
+  const filteredTasks = filterByScope(tasks);
+  
+  // Atualiza contadores
+  ['todo', 'doing', 'done'].forEach(status => {
+    const len = filteredTasks.filter(t => t.status === status).length;
+    if (counts[status]) counts[status].textContent = len;
+  });
+
+  filteredTasks.forEach(task => {
     const card = document.createElement('div');
     card.className = 'task-card';
     card.draggable = true;
-    card.id = `task-${task.id}`;
+    card.setAttribute('data-id', task.id);
 
-    card.addEventListener('dragstart', (e) => {
-      e.dataTransfer.setData('text/plain', String(task.id));
-      e.dataTransfer.effectAllowed = 'move';
+    card.addEventListener('dragstart', () => {
+      draggedCardId = task.id;
+      card.classList.add('dragging');
+    });
+    card.addEventListener('dragend', () => {
+      card.classList.remove('dragging');
+      draggedCardId = null;
     });
 
     card.innerHTML = `
       <strong>${escapeHTML(task.title)}</strong>
       ${task.dueDate ? `<small style="color:var(--text-muted)"><i class="fa-regular fa-calendar"></i> ${task.dueDate}</small>` : ''}
-      <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; margin-top:8px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; font-size:0.75rem; margin-top:4px;">
         <span class="badge-scope-tag scope-${task.scope}">${task.scope}</span>
-        <button class="btn-icon" onclick="deleteItem('tasks', ${task.id})"><i class="fa-solid fa-trash"></i></button>
+        <div>
+          ${task.status !== 'todo' ? `<button class="btn-action" onclick="moveTaskStatus(${task.id}, 'todo')">◀</button>` : ''}
+          ${task.status !== 'done' ? `<button class="btn-action" onclick="moveTaskStatus(${task.id}, 'done')">▶</button>` : ''}
+          <button class="btn-icon" onclick="deleteItem('tasks', ${task.id})"><i class="fa-solid fa-trash"></i></button>
+        </div>
       </div>`;
 
-    if (cols[task.status]) cols[task.status].appendChild(card);
+    if (cols[task.status]) {
+      cols[task.status].appendChild(card);
+    }
   });
 }
 
-window.allowDrop = function(ev) {
-  ev.preventDefault();
-  ev.dataTransfer.dropEffect = 'move';
-};
-
-window.drop = function(ev, targetStatus) {
-  ev.preventDefault();
-  const rawId = ev.dataTransfer.getData('text/plain');
-  if (!rawId) return;
-
-  const taskId = isNaN(rawId) ? rawId : Number(rawId);
-  const taskIndex = tasks.findIndex(t => t.id === taskId);
-
-  if (taskIndex !== -1) {
-    tasks[taskIndex].status = targetStatus;
+function moveTaskStatus(id, newStatus) {
+  const task = tasks.find(t => t.id === id);
+  if (task) {
+    task.status = newStatus;
     saveAndRender('planner_tasks', tasks);
   }
-};
+}
 
-// 5. Gestão de Projetos & Subtarefas
+// Projetos & Subtarefas
 function renderProjects() {
   const grid = document.getElementById('projects-list');
   if (!grid) return;
@@ -472,7 +521,7 @@ function toggleSubtask(projId, index) {
   }
 }
 
-// 6. Rastreador de Hábitos
+// Rastreador de Hábitos
 function renderHabits() {
   const container = document.getElementById('habits-list');
   if (!container) return;
@@ -521,7 +570,7 @@ function toggleHabitDate(id, dateStr) {
   }
 }
 
-// 7. Visão Calendário
+// Visão Calendário
 function setupCalendarControls() {
   document.getElementById('cal-prev').addEventListener('click', () => {
     currentCalDate.setMonth(currentCalDate.getMonth() - 1);
@@ -569,9 +618,10 @@ function renderCalendar() {
   }
 }
 
-// 8. Metas
+// Metas
 function renderGoals() {
   const grid = document.getElementById('goals-grid');
+  if (!grid) return;
   grid.innerHTML = '';
   filterByScope(goals).forEach(goal => {
     const percent = goal.target > 0 ? Math.min(Math.round((goal.current / goal.target) * 100), 100) : 0;
@@ -603,9 +653,10 @@ function addGoalValue(id) {
   }
 }
 
-// 9. Lembretes
+// Lembretes
 function renderReminders() {
   const list = document.getElementById('reminder-list');
+  if (!list) return;
   list.innerHTML = '';
   filterByScope(reminders).forEach(item => {
     list.innerHTML += `
@@ -632,7 +683,7 @@ function toggleReminder(id) {
   }
 }
 
-// 10. Diário & Anotações
+// Diário & Anotações
 function renderNotes() {
   const grid = document.getElementById('notes-grid');
   if (!grid) return;
@@ -654,7 +705,7 @@ function renderNotes() {
   });
 }
 
-// Funções de Persistência e Remoção
+// Persistência e Remoção
 function deleteItem(type, id) {
   if (type === 'finances') finances = finances.filter(i => i.id !== id);
   else if (type === 'tasks') tasks = tasks.filter(i => i.id !== id);
@@ -677,10 +728,17 @@ function saveAll() {
   localStorage.setItem('planner_projects', JSON.stringify(projects));
   localStorage.setItem('planner_recurring', JSON.stringify(recurring));
   localStorage.setItem('planner_notes', JSON.stringify(notes));
+
+  // Sincroniza abas abertas instantaneamente sem F5
+  syncChannel.postMessage({
+    type: 'SYNC_ALL',
+    finances, tasks, goals, reminders, habits, projects, recurring, notes
+  });
 }
 
 function saveAndRender(key, data) {
   localStorage.setItem(key, JSON.stringify(data));
+  saveAll(); // Salva tudo e transmite via canal em tempo real
   renderAll();
 }
 
@@ -696,4 +754,3 @@ function escapeHTML(str) {
     tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
   ) : '';
 }
-
