@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LifePlanner Pro - Sistema Completo de Gestão</title>
+
+  <!-- Google Fonts & FontAwesome -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="light-mode">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="brand">
+      <i class="fa-solid fa-compass"></i>
+      <h2>LifePlanner <span class="badge-pro">PRO</span></h2>
+    </div>
+
+    <nav class="nav-menu">
+      <button class="nav-btn active" data-tab="dashboard">
+        <i class="fa-solid fa-chart-pie"></i> Visão Geral
+      </button>
+
+      <div class="nav-separator">ÂMBITO ATIVO</div>
+      <div class="scope-selector">
+        <button class="scope-btn active" data-scope="all"><i class="fa-solid fa-border-all"></i> Todos</button>
+        <button class="scope-btn" data-scope="individual"><i class="fa-solid fa-user"></i> Individual</button>
+        <button class="scope-btn" data-scope="casal"><i class="fa-solid fa-heart"></i> Em Casal</button>
+        <button class="scope-btn" data-scope="profissional"><i class="fa-solid fa-briefcase"></i> Profissional</button>
+      </div>
+
+      <div class="nav-separator">MÓDULOS PRINCIPAIS</div>
+      <button class="nav-btn" data-tab="finances"><i class="fa-solid fa-wallet"></i> Finanças & Gastos</button>
+      <button class="nav-btn" data-tab="recurring"><i class="fa-solid fa-receipt"></i> Contas Recorrentes</button>
+      <button class="nav-btn" data-tab="tasks"><i class="fa-solid fa-list-check"></i> Tarefas (Kanban)</button>
+      <button class="nav-btn" data-tab="projects"><i class="fa-solid fa-diagram-project"></i> Projetos</button>
+      <button class="nav-btn" data-tab="habits"><i class="fa-solid fa-fire"></i> Rastreador de Hábitos</button>
+      <button class="nav-btn" data-tab="calendar"><i class="fa-solid fa-calendar-days"></i> Visão Calendário</button>
+      <button class="nav-btn" data-tab="goals"><i class="fa-solid fa-bullseye"></i> Metas Futuras</button>
+      <button class="nav-btn" data-tab="reminders"><i class="fa-solid fa-bell"></i> Lembretes & Rituais</button>
+      <button class="nav-btn" data-tab="notes"><i class="fa-solid fa-book-open"></i> Diário & Notas</button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="backup-actions">
+        <button class="btn-sm" id="export-btn" title="Baixar backup JSON"><i class="fa-solid fa-download"></i> Backup</button>
+        <label for="import-file" class="btn-sm"><i class="fa-solid fa-upload"></i> Restaurar</label>
+        <input type="file" id="import-file" accept=".json" style="display:none;">
+      </div>
+      <small><i class="fa-solid fa-shield-halved"></i> Armazenamento Local Seguro</small>
+    </div>
+  </aside>
+
+  <!-- Conteúdo Principal -->
+  <main class="main-content">
+
+    <header class="topbar">
+      <div>
+        <h1 id="page-title">Visão Geral</h1>
+        <p class="subtitle" id="page-subtitle">Acompanhe seus planos, tarefas e rotinas em um só lugar.</p>
+      </div>
+      <div class="topbar-actions">
+        <button class="theme-toggle-btn" id="theme-toggle" aria-label="Alternar Tema">
+          <i class="fa-solid fa-moon"></i>
+        </button>
+        <div class="user-badge">
+          <span class="badge-scope" id="active-scope-badge">Âmbito: Todos</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- DASHBOARD -->
+    <section id="tab-dashboard" class="tab-content active">
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="icon-box green"><i class="fa-solid fa-arrow-down"></i></div>
+          <div>
+            <span>Receitas</span>
+            <h3 id="dash-income">R$ 0,00</h3>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="icon-box red"><i class="fa-solid fa-arrow-up"></i></div>
+          <div>
+            <span>Despesas</span>
+            <h3 id="dash-expense">R$ 0,00</h3>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="icon-box blue"><i class="fa-solid fa-scale-balanced"></i></div>
+          <div>
+            <span>Saldo Líquido</span>
+            <h3 id="dash-balance">R$ 0,00</h3>
+          </div>
+        </div>
+        <div class="metric-card">
+          <div class="icon-box purple"><i class="fa-solid fa-fire"></i></div>
+          <div>
+            <span>Hábitos Ativos</span>
+            <h3 id="dash-habits-count">0</h3>
+          </div>
+        </div>
+      </div>
+
+      <div class="dashboard-charts">
+        <div class="card chart-card">
+          <h3>Distribuição Financeira</h3>
+          <div class="chart-wrapper">
+            <canvas id="financeChart"></canvas>
+          </div>
+        </div>
+        <div class="card summary-card">
+          <h3>Próximas Tarefas</h3>
+          <ul id="dash-task-list" class="dash-list"></ul>
+        </div>
+      </div>
+    </section>
+
+    <!-- FINANÇAS -->
+    <section id="tab-finances" class="tab-content">
+      <div class="card form-card">
+        <h3>Nova Transação</h3>
+        <form id="finance-form" class="form-grid">
+          <input type="text" id="fin-desc" placeholder="Descrição (Ex: Salário, Mercado)" required>
+          <input type="number" step="0.01" min="0.01" id="fin-amount" placeholder="Valor (R$)" required>
+          <select id="fin-type" required>
+            <option value="receita">Receita (+)</option>
+            <option value="despesa">Despesa (-)</option>
+          </select>
+          <select id="fin-category" required>
+            <option value="Moradia">Moradia</option>
+            <option value="Alimentação">Alimentação</option>
+            <option value="Transporte">Transporte</option>
+            <option value="Lazer">Lazer</option>
+            <option value="Trabalho">Trabalho</option>
+            <option value="Investimentos">Investimentos</option>
+            <option value="Outros">Outros</option>
+          </select>
+          <select id="fin-scope" required>
+            <option value="individual">Individual</option>
+            <option value="casal">Em Casal</option>
+            <option value="profissional">Profissional</option>
+          </select>
+          <button type="submit" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Registrar</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <div class="table-header-row">
+          <h3>Extrato Financeiro</h3>
+          <div class="search-box">
+            <input type="text" id="finance-search" placeholder="Buscar no extrato...">
+          </div>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Descrição</th>
+                <th>Categoria</th>
+                <th>Âmbito</th>
+                <th>Tipo</th>
+                <th>Valor</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="finance-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTAS RECORRENTES -->
+    <section id="tab-recurring" class="tab-content">
+      <div class="card form-card">
+        <h3>Nova Conta Recorrente / Assinatura</h3>
+        <form id="recurring-form" class="form-grid">
+          <input type="text" id="rec-name" placeholder="Nome (Ex: Netflix, Aluguel)" required>
+          <input type="number" step="0.01" min="0.01" id="rec-amount" placeholder="Valor Estimado (R$)" required>
+          <input type="number" min="1" max="31" id="rec-due-day" placeholder="Dia Vencimento (1-31)" required>
+          <select id="rec-scope" required>
+            <option value="individual">Individual</option>
+            <option value="casal">Em Casal</option>
+            <option value="profissional">Profissional</option>
+          </select>
+          <button type="submit" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Adicionar Conta</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Compromissos Recorrentes do Mês</h3>
+        <div class="table-container" style="margin-top: 15px;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Status</th>
+                <th>Conta/Assinatura</th>
+                <th>Vencimento</th>
+                <th>Âmbito</th>
+                <th>Valor</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody id="recurring-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- KANBAN -->
+    <section id="tab-tasks" class="tab-content">
+      <div class="card form-card">
+        <h3>Nova Tarefa</h3>
+        <form id="task-form" class="form-grid">
+          <input type="text" id="task-title" placeholder="Título da tarefa..." required>
+          <input type="date" id="task-duedate">
+          <select id="task-scope" required>
+            <option value="individual">Individual</option>
+            <option value="casal">Em Casal</option>
+            <option value="profissional">Profissional</option>
+          </select>
+          <select id="task-priority" required>
+            <option value="Baixa">Prioridade Baixa</option>
+            <option value="Média" selected>Prioridade Média</option>
+            <option value="Alta">Prioridade Alta</option>
+          </select>
+          <button type="submit" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Criar Tarefa</button>
+        </form>
+      </div>
+
+      <div class="kanban-board">
+        <div class="kanban-column" data-status="todo" ondragover="window.allowDrop(event)" ondrop="window.drop(event, 'todo')">
+          <div class="column-header yellow">
+            <h4><i class="fa-solid fa-circle"></i> A Fazer</h4>
+          </div>
+          <div class="column-body" id="col-todo"></div>
+        </div>
+
+        <div class="kanban-column" data-status="doing" ondragover="window.allowDrop(event)" ondrop="window.drop(event, 'doing')">
+          <div class="column-header blue">
+            <h4><i class="fa-solid fa-spinner"></i> Em Andamento</h4>
+          </div>
+          <div class="column-body" id="col-doing"></div>
+        </div>
+
+        <div class="kanban-column" data-status="done" ondragover="window.allowDrop(event)" ondrop="window.drop(event, 'done')">
+          <div class="column-header green">
+            <h4><i class="fa-solid fa-circle-check"></i> Concluído</h4>
+          </div>
+          <div class="column-body" id="col-done"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROJETOS -->
+    <section id="tab-projects" class="tab-content">
+      <div class="card form-card">
+        <h3>Criar Novo Projeto</h3>
+        <form id="project-form" class="form-grid">
+          <input type="text" id="proj-title" placeholder="Nome do Projeto (Ex: Reforma, Novo Site)" required>
+          <select id="proj-scope" required>
+            <option value="individual">Individual</option>
+            <option value="casal">Em Casal</option>
+            <option value="profissional">Profissional</option>
+          </select>
+          <button type="submit" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Iniciar Projeto</button>
+        </form>
+      </div>
+
+      <div id="projects-list" class="projects-grid"></div>
+    </section>
+
+    <!-- RASTREADOR DE HÁBITOS -->
+    <section id="tab-habits" class="tab-content">
+      <div class="card form-card">
+        <h3>Novo Hábito para Rastrear</h3>
+        <form id="habit-form" class="form-grid">
+          <input type="text" id="habit-name" placeholder="Ex: Ler 15 paginas, Beber 2L Água" required>
+          <select id="habit-scope" required>
+            <option value="individual">Individual</option>
+            <option value="casal">Em Casal</option>
+            <option value="profissional">Profissional</option>
+          </select>
+          <button type="submit" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Começar Hábito</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Acompanhamento dos Últimos 7 Dias</h3>
+        <div id="habits-list" class="habits-container" style="margin-top: 15px;"></div>
+      </div>
+    </section>
+
+    <!-- CALENDÁRIO -->
+    <section id="tab-calendar" class="tab-content">
+      <div class="card">
+        <div class="calendar-header">
+          <button class="btn-sm" id="cal-prev"><i class="fa-solid fa-chevron-left"></i> Anterior</button>
+          <h3 id="cal-month-year">Mês Ano</h3>
+          <button class="btn-sm" id="cal-next">Próximo <i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+        <div class="calendar-grid-header">
+          <div>Dom</div><div>Seg</div><div>Ter</div><div>Qua</div><div>Qui</div><div>Sex</div><div>Sáb</div>
+        </div>
+        <div id="calendar-days" class="calendar-grid"></div>
+      </div>
+    </section>
+
+    <!-- METAS -->
+    <section id="tab-goals" class="tab-content">
+      <div class="card form-card">
+        <h3>Adicionar Nova Meta Futura</h3>
+        <form id="goal-form" class="form-grid">
+          <input type="text" id="goal-title" placeholder="Objetivo (Ex: Viagem, Fundo de Reserva)" required>
+          <input type="number" step="0.01" min="0.01" id="goal-target" placeholder="Meta Total (R$)" required>
+          <input type="number" step="0.01" min="0" id="goal-current" placeholder="Valor Guardado (R$)" value="0">
+          <select id="goal-scope" required>
+            <option value="casal">Em Casal</option>
+            <option value="individual">Individual</option>
+            <option value="profissional">Profissional</option>
+          </select>
+          <button type="submit" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Criar Meta</button>
+        </form>
+      </div>
+
+      <div id="goals-grid" class="goals-grid"></div>
+    </section>
+
+    <!-- LEMBRETES -->
+    <section id="tab-reminders" class="tab-content">
+      <div class="card form-card">
+        <h3>Novo Lembrete ou Ritual</h3>
+        <form id="reminder-form" class="form-grid">
+          <input type="text" id="rem-text" placeholder="Ex: Pagar fatura, Treino de força" required>
+          <input type="time" id="rem-time" required>
+          <select id="rem-scope" required>
+            <option value="individual">Individual</option>
+            <option value="casal">Em Casal</option>
+            <option value="profissional">Profissional</option>
+          </select>
+          <button type="submit" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Guardar</button>
+        </form>
+      </div>
+
+      <div class="card">
+        <h3>Seus Lembretes & Rituais</h3>
+        <ul id="reminder-list" class="check-list"></ul>
+      </div>
+    </section>
+
+    <!-- DIÁRIO & NOTAS -->
+    <section id="tab-notes" class="tab-content">
+      <div class="card form-card">
+        <h3>Nova Anotação ou Reflexão</h3>
+        <form id="note-form" class="form-grid" style="flex-direction: column;">
+          <input type="text" id="note-title" placeholder="Título da Anotação..." required>
+          <textarea id="note-content" placeholder="Escreva suas ideias, aprendizados ou reflexões do dia..." rows="4" style="width:100%; border:1px solid var(--border-color); border-radius:8px; padding:10px; background:var(--bg-card); color:var(--text-main); font-family:inherit; outline:none;"></textarea>
+          <div style="display:flex; gap:10px; width:100%;">
+            <select id="note-scope" required style="flex:1;">
+              <option value="individual">Individual</option>
+              <option value="casal">Em Casal</option>
+              <option value="profissional">Profissional</option>
+            </select>
+            <button type="submit" class="btn primary-btn"><i class="fa-solid fa-plus"></i> Salvar Nota</button>
+          </div>
+        </form>
+      </div>
+
+      <div id="notes-grid" class="goals-grid"></div>
+    </section>
+
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
